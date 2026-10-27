@@ -1,0 +1,183 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  ORGANIZER
+  ADMIN
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  ATTENDED
+  EXPIRED
+}
+
+enum HoldStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+  RELEASED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  FREE_PASS
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  collegeId    String?    // Roll number or student college ID
+  phone        String?
+  department   String?
+  role         Role       @default(STUDENT)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  bookings     Booking[]
+  holds        ReservationHold[]
+  events       Event[]    @relation("OrganizerEvents")
+
+  @@index([email])
+}
+
+model Event {
+  id          String         @id @default(uuid())
+  title       String
+  slug        String         @unique
+  description String
+  category    String         // Culturals, Symposium, Hackathon, Music, Dance, Sports, Workshop
+  bannerUrl   String
+  venue       String
+  venueDetail String?
+  startDate   DateTime
+  endDate     DateTime
+  organizerId String
+  organizer   User           @relation("OrganizerEvents", fields: [organizerId], references: [id])
+  totalCapacity Int
+  availableSeats Int
+  status      String         @default("PUBLISHED") // DRAFT, PUBLISHED, COMPLETED, CANCELLED
+  isFeatured  Boolean        @default(false)
+  rules       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  ticketTiers TicketTier[]
+  holds       ReservationHold[]
+  bookings    Booking[]
+
+  @@index([category])
+  @@index([startDate])
+}
+
+model TicketTier {
+  id          String         @id @default(uuid())
+  eventId     String
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String         // General, VIP, Early Bird, Student Pass
+  price       Float          // 0 for free events
+  capacity    Int
+  available   Int
+  description String?
+  maxPerUser  Int            @default(4)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  holds       ReservationHold[]
+  tickets     Ticket[]
+
+  @@index([eventId])
+}
+
+model ReservationHold {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  eventId     String
+  event       Event       @relation(fields: [eventId], references: [id])
+  tierId      String
+  tier        TicketTier  @relation(fields: [tierId], references: [id])
+  quantity    Int
+  status      HoldStatus  @default(ACTIVE)
+  expiresAt   DateTime    // Exactly 10 minutes from creation
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  booking     Booking?
+
+  @@index([expiresAt, status])
+  @@index([userId, eventId])
+}
+
+model Booking {
+  id            String         @id @default(uuid())
+  bookingNumber String         @unique // e.g. CT-2026-X89K2
+  userId        String
+  user          User           @relation(fields: [userId], references: [id])
+  eventId       String
+  event         Event          @relation(fields: [eventId], references: [id])
+  holdId        String?        @unique
+  hold          ReservationHold? @relation(fields: [holdId], references: [id])
+  totalAmount   Float
+  quantity      Int
+  status        BookingStatus  @default(CONFIRMED)
+  qrToken       String         @unique // cryptographically unique token for entry verification
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tickets       Ticket[]
+  payment       Payment?
+
+  @@index([userId])
+  @@index([bookingNumber])
+}
+
+model Ticket {
+  id          String      @id @default(uuid())
+  bookingId   String
+  booking     Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  tierId      String
+  tier        TicketTier  @relation(fields: [tierId], references: [id])
+  ticketCode  String      @unique // e.g. CT-TKT-884920
+  attendeeName String
+  attendeeEmail String
+  collegeId   String?
+  checkedIn   Boolean     @default(false)
+  checkedInAt DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([ticketCode])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  bookingId       String        @unique
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  transactionRef  String        @unique // e.g. TXN-UPI-98234123
+  amount          Float
+  method          PaymentMethod
+  status          PaymentStatus @default(SUCCESS)
+  upiVpa          String?       // Demo UPI VPA (e.g., student@oksbi)
+  cardLastFour    String?       // Demo card last 4 digits
+  createdAt       DateTime      @default(now())
+
+  @@index([transactionRef])
+}

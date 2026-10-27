@@ -1,0 +1,6 @@
+{
+  "name": "CampusTix - College Event Ticket Reservation",
+  "description": "Premium college event ticketing platform with atomic inventory management, 10-minute hold reservation engine, QR digital tickets, and role-based access for students, organizers, and admins.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
